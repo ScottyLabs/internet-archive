@@ -61,15 +61,15 @@ def archive(link, debug):
                 try:
                     r = requests.get(url, headers=headers)
 
-                    was_successful = False
-
                     if r.ok:
                         response = r.json()
 
                         if response['status'] == 'success':
                             print(
                                 f'Finished archiving {link}! ({time.time() - start:.1f}s)')
-                            was_successful = True
+                            if debug:
+                                print_debug(r)
+                            return True
 
                         elif response['status'] == 'pending':
                             pass
@@ -77,11 +77,7 @@ def archive(link, debug):
                         else:
                             print(f"Error occured while archiving {link}!")
                             print_debug(r)
-
-                    if was_successful:
-                        if debug:
-                            print_debug(r)
-                        return True
+                            return False
 
                 except:
                     print("Could not access server!")

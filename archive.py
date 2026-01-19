@@ -93,14 +93,10 @@ def archive(link, debug):
 
         else:
             print(f'Could not archive {link}!')
-            if debug:
-                print_debug(r)
+            print_debug(r)
 
     except Exception as e:
         print(f'Could not archive {link}!')
         print('Error: ', e)
-        if debug:
-            print("Status Code:", r.status_code)
-            print("Response JSON:", r.json())
 
     return False

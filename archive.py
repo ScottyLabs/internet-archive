@@ -82,7 +82,7 @@ def archive(link, debug):
                 except:
                     print("Could not access server!")
                     if debug:
-                        print_debug
+                        print_debug(r)
                     return False
 
                 # pause time, wait a random time (20,25) so it seems like process is random

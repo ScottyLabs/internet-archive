@@ -9,5 +9,5 @@ Archived websites may take a few minutes before appearing.
 ## Usage
 
 ```bash
-uv run python3 main.py "https://enr-apps.as.cmu.edu/assets/SOC/" --debug
+uv run python3 src/main.py -p soc --debug
 ```

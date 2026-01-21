@@ -19,10 +19,24 @@ in
   options.services.internet-archive = {
     enable = mkEnableOption "Internet Archive Save Page Now service";
 
-    url = mkOption {
-      type = types.str;
-      description = "URL to archive";
-      example = "https://example.com/";
+    urls = mkOption {
+      type = types.listOf types.str;
+      default = [ ];
+      description = "URLs to archive";
+      example = [ "https://example.com/" ];
+    };
+
+    presets = mkOption {
+      type = types.listOf types.str;
+      default = [ ];
+      description = "Presets to run (e.g. 'soc')";
+      example = [ "soc" ];
+    };
+
+    maxRetries = mkOption {
+      type = types.int;
+      default = 10;
+      description = "Maximum retries before giving up";
     };
 
     schedule = mkOption {
@@ -58,10 +72,14 @@ in
         assertion = cfg.environmentFile != null;
         message = "services.internet-archive.environmentFile must be set";
       }
+      {
+        assertion = cfg.urls != [ ] || cfg.presets != [ ];
+        message = "services.internet-archive: must specify at least one url or preset";
+      }
     ];
 
     systemd.services.internet-archive = {
-      description = "Archive URL to Internet Archive";
+      description = "Archive URLs to Internet Archive";
       after = [ "network-online.target" ];
       wants = [ "network-online.target" ];
 
@@ -71,9 +89,11 @@ in
         ExecStart =
           let
             pkg = flake.packages.${pkgs.system}.default;
+            urlArgs = lib.concatMapStringsSep " " lib.escapeShellArg cfg.urls;
+            presetArgs = lib.concatMapStringsSep " " (p: "-p ${lib.escapeShellArg p}") cfg.presets;
             debugFlag = if cfg.debug then "--debug" else "";
           in
-          "${pkg}/bin/python ${flake}/main.py ${lib.escapeShellArg cfg.url} ${debugFlag}";
+          "${pkg}/bin/python ${flake}/src/main.py ${urlArgs} ${presetArgs} --max-retries ${toString cfg.maxRetries} ${debugFlag}";
 
         # Hardening
         DynamicUser = true;

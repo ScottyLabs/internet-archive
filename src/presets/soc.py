@@ -13,6 +13,6 @@ def get_outlinks():
     soc_files = re.findall(r'href="(sched_layout[^"]*\.\w+)"', r.text)
 
     return [
-        {"url": url, "capture_outlinks": "1"},
+        {"url": url},
         *[{"url": url + file} for file in soc_files],
     ]

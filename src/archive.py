@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 
 class Archiver:
-    def __init__(self, max_retries: int = 10, debug: bool = False):
+    def __init__(self, max_retries: int = 10, debug: bool = False, max_requests_per_min: int = 12, cooldown_time: int = 180):
         load_dotenv()
 
         save_url = os.getenv("INTERNET_ARCHIVE_SPN2_URL")
@@ -28,6 +28,9 @@ class Archiver:
         self.max_retries = max_retries
         self.debug = debug
         self.fails = 0
+        self.requests_made = 0
+        self.max_requests_per_min = max_requests_per_min
+        self.cooldown_time = cooldown_time
 
     def _backoff(self):
         self.fails += 1
@@ -35,13 +38,24 @@ class Archiver:
             raise MaxRetriesExceeded(f"Exceeded {self.max_retries} retries")
 
         delay = (2 ** (self.fails - 1)) + random.random()
-        print(f"Backing off for {delay:.1f}s (attempt {self.fails}/{self.max_retries})")
+        print(
+            f"Backing off for {delay:.1f}s (attempt {self.fails}/{self.max_retries})")
         time.sleep(delay)
+
+    def _rate_limit(self):
+        self.requests_made += 1
+
+        if (self.requests_made >= self.max_requests_per_min):
+            print(
+                f"Stopping requests for {self.cooldown_time} seconds to avoid the rate limit...")
+            time.sleep(self.cooldown_time)
+            self.requests_made = 0
 
     def _request(self, method: str, url: str, **kwargs):
         while True:
             try:
-                r = requests.request(method, url, headers=self.headers, **kwargs)
+                r = requests.request(
+                    method, url, headers=self.headers, **kwargs)
                 if r.ok:
                     self.fails = 0  # reset on success
                     return r
@@ -63,35 +77,50 @@ class Archiver:
 
         payload["capture_all"] = "1"
 
-        start = time.time()
-        print(f"Submitting {link}...")
+        print(f"Submitting {link}")
 
         r = self._request("POST", self.save_url, data=payload)
         job_id = r.json()["job_id"]
         status_url = self.status_url + job_id
 
+        return status_url
+
+    def check_status(self, status_url: str) -> bool:
         while True:
-            print(f"Archiving {link}... ({time.time() - start:.1f}s)")
+            print(f"Checking status of {status_url}")
             r = self._request("GET", status_url)
             response = r.json()
 
             if response["status"] == "success":
-                print(f"Finished archiving {link}! ({time.time() - start:.1f}s)")
+                print(f"Finished archiving {status_url}!")
                 return True
             elif response["status"] == "pending":
-                time.sleep(3 + 2 * random.random())
+                print("Still waiting on server to finish...")
+                time.sleep(10 + 5 * random.random())
             else:
-                print(f"Error archiving {link}: {response}")
+                print(f"Error archiving {status_url}: {response}")
                 return False
 
     def archive_all(self, links: list[str | dict]) -> bool:
         success = True
+        status_urls = []
         for link in links:
+            self._rate_limit()
             try:
                 self.fails = 0
-                success = self.archive(link) and success
+                status_urls.append(self.archive(link))
             except MaxRetriesExceeded as e:
                 print(f"Failed to archive {link}: {e}")
+                success = False
+
+        for status_url in status_urls:
+            self._rate_limit()
+            try:
+                self.fails = 0
+                success = self.check_status(status_url)
+
+            except MaxRetriesExceeded as e:
+                print(f"Failed to check the status of {status_url}: {e}")
                 success = False
 
         return success
